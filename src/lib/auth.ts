@@ -1,59 +1,119 @@
-import NextAuth from "next-auth";
-import { DrizzleAdapter } from "@auth/drizzle-adapter";
-
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import NextAuth, { NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 
-import { db } from "@/db/drizzle";
-import { accounts, sessions, users, verificationTokens } from "@/db/schema";
-
-import { eq } from "drizzle-orm";
-import { signInSchema } from "./zod";
+import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { signInSchema } from "./zod";
+import { Prisma } from "@prisma/client";
+import { ZodError } from "zod";
+import { v4 as uuidv4 } from "uuid";
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  adapter: DrizzleAdapter(db, {
-    usersTable: users,
-    accountsTable: accounts,
-    sessionsTable: sessions,
-    verificationTokensTable: verificationTokens,
-  }),
-  session: {
-    strategy: "jwt",
+import { Adapter } from "next-auth/adapters";
+
+const credentials = Credentials({
+  credentials: {
+    email: { label: "Email", type: "email" },
+    password: { label: "Password", type: "password" },
   },
-  providers: [
-    Credentials({
-      credentials: {
-        email: { label: "Email" },
-        password: { label: "Password", type: "password" },
-      },
-      authorize: async (credentials) => {
-        console.log(credentials);
+  async authorize(credentials) {
+    try {
+      const validate = await signInSchema.parseAsync(credentials);
+      const { email, password } = validate;
 
-        const { email, password } = await signInSchema.parseAsync(credentials);
+      const user = await db.user.findUnique({
+        where: { email },
+        include: { accounts: true },
+      });
 
-        const user = await db
-          .select()
-          .from(users)
-          .where(eq(users.email, email))
-          .limit(1);
+      if (!user || !user.password) {
+        throw "account dont exist";
+      }
 
-        if (!user) {
-          throw new Error("Invalid credentials.");
-        }
+      if (user.accounts[0]?.provider !== "credentials") {
+        throw `Please sign in with ${user.accounts[0]?.provider}`;
+      }
 
-        const passwordMatch = await bcrypt.compare(password, user[0].password!);
+      const passwordmatch = await bcrypt.compare(password, user.password);
 
-        if (passwordMatch) {
-          return {
-            id: user[0].id,
-            name: user[0].name,
-            email: user[0].email,
-            image: user[0].image,
-          };
-        }
+      if (!passwordmatch) {
+        throw "invalid password";
+      }
 
-        return null;
-      },
-    }),
-  ],
+      return user;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientInitializationError ||
+        error instanceof Prisma.PrismaClientUnknownRequestError
+      ) {
+        throw new Error("System Error Occured. Please Contact Support Team");
+      }
+
+      if (error instanceof ZodError) {
+        throw new Error(error.errors[0].message!);
+      }
+
+      throw error;
+    }
+  },
 });
+
+const config = {
+  adapter: PrismaAdapter(db) as Adapter,
+  session: {
+    strategy: "database",
+  },
+  providers: [credentials],
+  callbacks: {
+    async jwt({ account, user, token }) {
+      if (account?.provider === "credentials") {
+        const sessionToken = uuidv4();
+        const expires = new Date(Date.now() + 60 * 60 * 24 * 30 * 1000);
+
+        const session = await PrismaAdapter(db).createSession!({
+          userId: user.id!,
+          sessionToken,
+          expires,
+        });
+        token.sessionId = session.sessionToken;
+      }
+      return token;
+    },
+    session({ session }) {
+      if (!session.user) return session;
+      const user = {
+        id: session.user.id,
+        name: session.user.name,
+        email: session.user.email,
+        emailVerified: session.user.emailVerified,
+        image: session.user.image,
+        role: session.user.role,
+      };
+      session.user = user;
+      return session;
+    },
+  },
+  jwt: {
+    async encode({ token }) {
+      return token?.sessionId as unknown as string;
+    },
+  },
+  events: {
+    async signOut(message) {
+      if ("session" in message && message.session?.sessionToken) {
+        await db.session.deleteMany({
+          where: {
+            sessionToken: message.session.sessionToken,
+          },
+        });
+      }
+    },
+  },
+  pages: {
+    signIn: "/auth/login",
+    signOut: "/",
+  },
+  trustHost: true,
+} satisfies NextAuthConfig;
+
+export const { handlers, signIn, signOut, auth } = NextAuth(config);

@@ -1,58 +1,42 @@
-// export { auth as middleware } from "@/auth";
+import { auth } from "@/lib/auth";
 
-// import { NextResponse } from "next/server";
-// import type { NextRequest } from "next/server";
-// import { auth } from "./lib/auth";
+const publicRoutes = ["/signin", "/signup"];
 
-// const publicRoutes = ["/signin", "/signup"];
+export default auth((req): any => {
+  const { nextUrl } = req;
+  const isLoggedIn = !!req.auth;
+  console.log("isLoggedIn", isLoggedIn);
+  console.log("nextUrl", nextUrl);
 
-// export default async function middleware(request: NextRequest) {
-//   const session = await auth();
+  const isPublicRoute = publicRoutes.includes(nextUrl.pathname);
 
-//   const isPublic = publicRoutes.some((route) =>
-//     request.nextUrl.pathname.startsWith(route)
-//   );
+  if (isPublicRoute) {
+    if (isLoggedIn) {
+      return Response.redirect(new URL("/", nextUrl));
+    }
 
-//   if (!session && isPublic) {
-//     return NextResponse.next();
-//   }
+    return null;
+  }
 
-//   if (session && isPublic) {
-//     const absoluteURL = new URL("/", request.nextUrl.origin);
-//     console.log("absoluteURL", absoluteURL);
-//     return NextResponse.redirect(absoluteURL.toString());
-//   }
+  if (!isLoggedIn && !isPublicRoute) {
+    let callbackUrl = nextUrl.pathname;
+    if (nextUrl.search) {
+      callbackUrl += nextUrl.search;
+    }
 
-//   return NextResponse.next();
-// }
+    const encodedCallbackUrl = encodeURIComponent(callbackUrl);
 
-// export const config = {
-//   matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
-// };
+    return Response.redirect(
+      new URL(`/auth/login?callbackUrl=${encodedCallbackUrl}`, nextUrl)
+    );
+  }
 
-export { auth as middleware } from "@/lib/auth";
+  return null;
+});
 
-// import { NextResponse } from "next/server";
-// import type { NextRequest } from "next/server";
-// import { auth } from "./lib/auth";
-
-// const protectedRoutes = ["/middleware"];
-
-// export default async function middleware(request: NextRequest) {
-//   const session = await auth();
-
-//   const isProtected = protectedRoutes.some((route) =>
-//     request.nextUrl.pathname.startsWith(route)
-//   );
-
-//   if (!session && isProtected) {
-//     const absoluteURL = new URL("/", request.nextUrl.origin);
-//     return NextResponse.redirect(absoluteURL.toString());
-//   }
-
-//   return NextResponse.next();
-// }
-
-// export const config = {
-//   matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
-// };
+// Optionally, don't invoke Middleware on some paths
+// Read more: https://nextjs.org/docs/app/building-your-application/routing/middleware#matcher
+export const config = {
+  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+  // matcher match all the routes where the middleware will be invoked!
+};

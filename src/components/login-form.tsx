@@ -1,24 +1,30 @@
 "use client";
 
+import { loginAction } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { SignInSchema, signInSchema } from "@/lib/zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const { register, handleSubmit } = useForm<SignInSchema>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<SignInSchema>({
     resolver: zodResolver(signInSchema),
   });
 
   async function onSubmit(data: SignInSchema) {
     console.log(data);
+    await loginAction(data);
   }
 
   return (
@@ -42,6 +48,11 @@ export function LoginForm({
                   required
                   {...register("email")}
                 />
+                {errors?.email && (
+                  <p className="text-sm text-destructive">
+                    {errors.email.message}
+                  </p>
+                )}
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
@@ -59,6 +70,11 @@ export function LoginForm({
                   required
                   {...register("password")}
                 />
+                {errors?.password && (
+                  <p className="text-sm text-destructive">
+                    {errors.password.message}
+                  </p>
+                )}
               </div>
               <Button type="submit" className="w-full">
                 Login

@@ -1,17 +1,18 @@
 "use server";
 
 import { signIn } from "@/lib/auth";
+import { SignInSchema } from "@/lib/zod";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 
-export async function loginAction(_prevState: any, formData: FormData) {
+export async function loginAction(data: SignInSchema) {
   try {
     await signIn("credentials", {
-      email: formData.get("email") as string,
-      password: formData.get("password") as string,
+      email: data.email,
+      password: data.password,
       redirect: true,
       redirectTo: "/",
     });
-  } catch (error: any) {
+  } catch (error) {
     if (isRedirectError(error)) {
       throw error;
     }
