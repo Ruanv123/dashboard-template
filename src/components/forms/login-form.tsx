@@ -24,7 +24,11 @@ export function LoginForm({
 
   async function onSubmit(data: SignInSchema) {
     console.log(data);
-    await loginAction(data);
+    try {
+      await loginAction(data);
+    } catch (error) {
+      console.log(error);
+    }
   }
 
   return (

@@ -1,21 +1,9 @@
-import "next-auth";
-import { DateTime } from "next-auth/providers/kakao";
+import { type DefaultSession } from "next-auth";
 
 declare module "next-auth" {
   interface Session {
-    user: IUser;
-  }
-
-  export type IUser = {
-    id: string;
-    image: string;
-    name: string;
-    email: string;
-    emailVerified: DateTime;
-    role: UserRole;
-  };
-  enum UserRole {
-    USER,
-    ADMIN,
+    user: {
+      role: string;
+    } & DefaultSession["user"];
   }
 }

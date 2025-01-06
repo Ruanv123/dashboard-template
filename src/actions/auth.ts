@@ -2,7 +2,7 @@
 
 import { signIn } from "@/lib/auth";
 import { SignInSchema } from "@/lib/zod";
-import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { AuthError } from "next-auth";
 
 export async function loginAction(data: SignInSchema) {
   try {
@@ -13,15 +13,14 @@ export async function loginAction(data: SignInSchema) {
       redirectTo: "/",
     });
   } catch (error) {
-    if (isRedirectError(error)) {
-      throw error;
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case "CredentialsSignin":
+          return "Invalid credentials.";
+        default:
+          return "Something went wrong.";
+      }
     }
-
-    if (error.type === "CredentialsSignin") {
-      return { success: false, message: "Dados de login incorretos." };
-    }
-
-    console.log(error);
-    return { success: false, message: "Ops, algum erro aconteceu!" };
+    throw error;
   }
 }
