@@ -24,3 +24,11 @@ export async function loginAction(data: SignInSchema) {
     throw error;
   }
 }
+
+export async function registerAction() {
+  try {
+    
+  } catch (error) {
+    throw error;
+  }
+}
